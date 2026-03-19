@@ -12,8 +12,8 @@
 
 enum STATE{
     INVALID = 0,   // deafult/empty
-    SHARED = 1,    // clean/read-only; s-> broadcast invalidation -> m 
-    EXCLUSIVE = 2, // clean/read-write allowed; e-> m; optimization
+    SHARED = 1,    // clean/read-only; s-> broadcast change -> m 
+    EXCLUSIVE = 2, // clean/read-write allowed; e-> m; optimization; goal: less bus traffic
     MODIFIED = 3   // Dirty / Write-Back needed
 };
 

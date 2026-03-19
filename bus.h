@@ -7,18 +7,23 @@
 #include <cstdint>
 #include <cmath>
 #include "lru.h" 
-#include "setAssociativeCache.cpp"
+#include "setAssociativeCache.h"
 
 class setAssociativeCache;
 
 class bus{
     private: 
         //this is a vector of setAssociativeCache pointers 
-        std:vector<setAssociativeCache*> listeners; //all L3's
+        std::vector<setAssociativeCache*> listeners; //all L3's
     public: 
-        void addListener(setAssociativeCache* c);
-        uint8_t* readBus(uint32_t address, int core_id);
-        void writeInvalidate(uint32_t address, int core_id);
+        void addListener(setAssociativeCache* L3);
+        std::pair<bool, uint8_t*> readBus(uint32_t address, int core_id);
+        void writeBus(uint32_t address, int core_id);
+        void printStats();
+        int totalSnoopCycles = 0;
+        int readTransactions = 0;
+        int writeTransactions = 0;
+        int totalSnoopsIssued = 0;
 }; 
 
 

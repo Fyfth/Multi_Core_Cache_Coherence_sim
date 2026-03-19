@@ -4,6 +4,8 @@
 #include <cmath>
 #include <cstring>
 #include "setAssociativeCache.h"
+#include "latency.h"
+#include "bus.h"
 
 using namespace std;
 unordered_map<uint32_t, uint8_t> setAssociativeCache::RAM;
@@ -22,6 +24,9 @@ setAssociativeCache::setAssociativeCache(int numSets, int setSize, setAssociativ
 
 void setAssociativeCache::setPrevLevel(setAssociativeCache* prev) {
     prevLevel = prev;
+}
+void setAssociativeCache::setNextLevel(setAssociativeCache* next){
+    nextLevel = next;
 }
 
 
@@ -46,14 +51,11 @@ bool setAssociativeCache::contains(uint32_t address){
     return sets[setIdx].contains(tagValue); 
 }
 
-void setAssociativeCache::ramWrite(uint32_t address, uint32_t data){
-    if (RAM.find(address) == RAM.end()){
-        cout<<"RAM Miss; Allocating new address "<<address<<"\n";
+void setAssociativeCache::ramWrite(uint32_t address, uint8_t* data){
+    for (int i = 0; i < 64; i++) {
+        RAM[address + i] = data[i];
     }
-    for(int i=0; i<4; i++){
-        RAM[address + i] = (data >> (i * 8)) & 0xFF;
-    }
-    cout<<"Wrote data "<<data<<" to RAM address "<<address<<" - "<<address+3<<"\n";
+    cout << "Snoop intercepted Modified snoopRead; line to RAM\n";
 }
 
 
@@ -75,6 +77,7 @@ std::vector<uint8_t> setAssociativeCache::ramRead(uint32_t address){
 
 void setAssociativeCache::evictIfNeeded(int set){
     if(sets[set].isFull()){//current set is full
+        evictions++;
         CacheLine temp  = sets[set].peek(); 
         uint32_t victimTag = temp.tag;
         uint32_t victimAddress = ((victimTag)<<(bitsOffsets + bitSets)) | (set << bitsOffsets);
@@ -134,10 +137,14 @@ void setAssociativeCache::write (uint32_t address, uint32_t data){// I always wr
 
     //only L1 should call this; recursively brings cache line up 
     readBlock(address);
+    CacheLine* line = sets[setIdx].get(tagValue);
+    if(line->state == SHARED && busPtr !=nullptr){
+        busPtr->writeBus(address, core_id); 
+    }
 
-    if(sets[setIdx].contains(tagValue)){
-        CacheLine* line = sets[setIdx].get(tagValue);
-        
+    
+
+    if(sets[setIdx].contains(tagValue)){      
         //unpacketize
         for(int i =0; i<4; i++){
             //little endian write
@@ -152,25 +159,45 @@ uint8_t* setAssociativeCache::readBlock (uint32_t address){//fetch the block to 
     int tagValue = tag(address); 
     int setIdx = set(address); 
 
-    if(sets[setIdx].contains(tagValue)){//hit 
+    if(sets[setIdx].contains(tagValue)){//hit
+        hits++;
+        if(prevLevel == nullptr) totalCycles += L1_HIT_CYCLES;
+        else if(nextLevel == nullptr) totalCycles += L3_HIT_CYCLES;
+        else totalCycles += L2_HIT_CYCLES;
+
+        // track invalidation → read pattern
+        if(wasRecentlyInvalidated){
+            invalidationToRead++;
+            wasRecentlyInvalidated = false;
+        }
         CacheLine* line = sets[setIdx].get(tagValue); 
         return line->data; 
     }
+    misses++;
 
-    uint8_t* newData;
-    std::vector<uint8_t> list;
+    vector<uint8_t> fetchedData(64); 
+    STATE initState = EXCLUSIVE; 
     if(nextLevel !=nullptr){
-        newData = nextLevel->readBlock(address);
-    }else{//I am L3, look for ram 
-        list = ramRead(address);
-        newData = list.data(); //newData is the pointer to the data
+        uint8_t* ptr = nextLevel->readBlock(address);
+        memcpy(fetchedData.data(), ptr, 64); 
+
+    }else{//I am L3, look for ram or snoop other cores 
+        //if snoop returns dirty get it, else go to ram 
+       
+        auto[isShared,dataPtr] = busPtr->readBus(address, core_id);
+        if(dataPtr !=nullptr){
+            memcpy(fetchedData.data(), dataPtr, 64);
+            initState = SHARED;
+        }else{
+            fetchedData = ramRead(address); 
+            initState = isShared? SHARED:EXCLUSIVE; 
+        }
     }
 
     //miss, evict, and add
     evictIfNeeded(setIdx); 
-
-    sets[setIdx].put(tagValue,newData, EXCLUSIVE); 
-    return sets[setIdx].get(tagValue)->data; //new dadta
+    sets[setIdx].put(tagValue,fetchedData.data(), initState); 
+    return sets[setIdx].get(tagValue)->data; //new data
 }
 
 int setAssociativeCache::read (uint32_t address){ //read the offset
@@ -206,6 +233,74 @@ void setAssociativeCache::backInvalidate(uint32_t address){//look upward, copy d
         sets[setIdx].remove(tagValue); 
     //bool isDirty; 
     }
+}
+
+pair<STATE, uint8_t*> setAssociativeCache::snoop(uint32_t address, int type){// pass in the address, type: 0 = read/1 = write 
+    //assume only L3 calls this -> inclusive writeback
+    int tagValue = tag(address); 
+    int setIdx = set(address); 
+
+    if(!sets[setIdx].contains(tagValue)){//check first 
+        return {INVALID, nullptr}; 
+    }
+    CacheLine* line = sets[setIdx].get(tagValue);//fresh grab
+    STATE original_state = line->state;
+    uint8_t* data_flush = nullptr; 
+    backInvalidate(address); //pass down 
+    line = sets[setIdx].get(tagValue);
+
+    if(type ==0){//read --> snoop to "share state" 
+            if(original_state == MODIFIED){
+                coherenceDowngrades++;
+                data_flush = new uint8_t[64];// Very important! Need to allocate space at DEST for the "stuff" to go in to 
+                memcpy(data_flush, line->data, 64);//deep copy 
+                line->state = SHARED;
+                ramWrite(address, data_flush); // RAM GETS A COPY TOO!!!!!!!
+            } else if (original_state == EXCLUSIVE) {
+                coherenceDowngrades++;
+                line->state = SHARED; // Downgrade (no intercept needed, Read from Ram is fine)
+            }else if(original_state == SHARED){
+                // do nothing, RAM up to date, no data change needed 
+            }
+        }
+    
+    else{//write -> shared state wants to write -> must invalidate all other cores
+        if(original_state == INVALID){
+            wastedSnoops++; // we were snooped but had nothing
+            return {INVALID, nullptr};
+        }
+        if(original_state ==MODIFIED){
+            coherenceInvalidations++;
+            data_flush = new uint8_t[64];
+            memcpy(data_flush, line->data, 64); //save and return 
+            ramWrite(address, data_flush);
+        }
+        line->state = INVALID;
+        coherenceInvalidations++;
+        wasRecentlyInvalidated = true; // flag for next read
+
+    }
+    return {original_state, data_flush};
+}
+void setAssociativeCache::setBus(bus* b, int id){
+    busPtr = b;
+    core_id = id;
+}
+void setAssociativeCache::printStats(std::string levelName){//chatgpt
+    int total = hits + misses;
+    float hitRate = total > 0 ? (float)hits/total * 100.0f : 0;
+    float missRate = total > 0 ? (float)misses/total * 100.0f : 0;
+    
+    cout << "=== " << levelName << " Stats ===\n";
+    cout << "Total accesses:          " << total << "\n";
+    cout << "Hits:                    " << hits << "\n";
+    cout << "Misses:                  " << misses << "\n";
+    cout << "Hit rate:                " << hitRate << "%\n";
+    cout << "Miss rate:               " << missRate << "%\n";
+    cout << "Evictions:               " << evictions << "\n";
+    cout << "Coherence invalidations: " << coherenceInvalidations << "\n";
+    cout << "Coherence downgrades:    " << coherenceDowngrades << "\n";
+    cout << "\n";
 }
 
 
