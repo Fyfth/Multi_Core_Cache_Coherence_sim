@@ -21,7 +21,7 @@ public:
     //4*64*8*4 = 8192
 
     //size of L2 -> 8 sets of 8 ways 
-    //8*64*8*8 = 
+    //8*64*8*8 = 32786
 
     void insert(uint32_t address){
         bits[hash1(address)] = true;
@@ -33,8 +33,8 @@ public:
         return bits[hash1(address)] &&
                bits[hash2(address)] &&
                bits[hash3(address)];
-        // false = DEFINITELY not present → safe to skip snoop
-        // true  = MAYBE present → do full snoop
+        // false = Definitely not present --> safe to skip snoop
+        // true  = Maybe present --> do full snoop
     }
 
     void reset(){

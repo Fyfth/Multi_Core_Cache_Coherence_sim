@@ -1,0 +1,194 @@
+
+========== TEST 1: Basic Read/Write ==========
+PASS expected=deadbeef got=deadbeef
+
+========== TEST 2: Same Core Write Twice ==========
+PASS expected=11111111 got=11111111
+
+========== TEST 3: Cross-Core Read ==========
+PASS expected=cafebabe got=cafebabe
+
+========== TEST 4: Write Contention ==========
+PASS expected=22222222 got=22222222
+
+========== TEST 5: Three Core Contention ==========
+PASS core0 expected=cccccccc got=cccccccc
+PASS core1 expected=cccccccc got=cccccccc
+PASS core2 expected=cccccccc got=cccccccc
+
+========== TEST 6: False Sharing ==========
+PASS core0 expected=aaaaaaaa got=aaaaaaaa
+PASS core1 expected=bbbbbbbb got=bbbbbbbb
+
+========== TEST 7: Ping Pong ==========
+PASS expected=00000004 got=4
+
+========== TEST 8: Temporal Locality ==========
+PASS expected=12345678 got=12345678
+
+========== TEST 9: Read Then Write ==========
+PASS core1 first read expected=dead0000 got=dead0000
+PASS core1 second read expected=dead1111 got=dead1111
+
+========== TEST 10: Multiple Addresses ==========
+PASS expected=11111111 got=11111111
+PASS expected=22222222 got=22222222
+PASS expected=33333333 got=33333333
+
+========== TEST 11: Eviction ==========
+PASS evicted line readable from L2, expected=1 got=1
+PASS newest line still in L1, expected=5 got=5
+
+========== TEST 12: Eviction + Cross-Core Snoop ==========
+PASS core1 read before eviction, expected=aaaa0001 got=aaaa0001
+PASS core1 still correct after core0 eviction, expected=aaaa0001 got=aaaa0001
+PASS core1 sees updated value after invalidation, expected=bbbb0001 got=bbbb0001
+PASS core0 reads own write, expected=bbbb0001 got=bbbb0001
+*****Constrained Random*****
+
+****** CONSTRAINED RANDOM TESTS ******
+  Seeds: 20  Ops/seed: 500  Cores: 3
+
+********************
+  SCOREBOARD
+********************
+  PASS:    4686
+  FAIL:    0
+  SKIPPED: 254
+  TOTAL:   4686
+
+  ALL SEEDS PASSED
+********************
+========== CORE 0 ==========
+
+*** L1 Stats ***
+Total accesses:          174
+Hits:                    35
+Misses:                  139
+Hit rate:                20.1149%
+Miss rate:               79.8851%
+Evictions:               125
+Coherence invalidations: 0
+Coherence downgrades:    0
+
+*** L2 Stats ***
+Total accesses:          139
+Hits:                    47
+Misses:                  92
+Hit rate:                33.813%
+Miss rate:               66.187%
+Evictions:               11
+Coherence invalidations: 0
+Coherence downgrades:    0
+
+*** L3 Stats ***
+Total accesses:          92
+Hits:                    2
+Misses:                  90
+Hit rate:                2.17391%
+Miss rate:               97.8261%
+Evictions:               0
+Coherence invalidations: 126
+Coherence downgrades:    62
+
+AMAT: 138.184 cycles
+
+=== Coherence Overhead ===
+Invalidations received:  126
+Downgrades received:     62
+Wasted snoops:           0
+Invalidation→Read:       2
+
+========== CORE 1 ==========
+
+*** L1 Stats ***
+Total accesses:          173
+Hits:                    33
+Misses:                  140
+Hit rate:                19.0751%
+Miss rate:               80.9249%
+Evictions:               129
+Coherence invalidations: 0
+Coherence downgrades:    0
+
+*** L2 Stats ***
+Total accesses:          140
+Hits:                    44
+Misses:                  96
+Hit rate:                31.4286%
+Miss rate:               68.5714%
+Evictions:               13
+Coherence invalidations: 0
+Coherence downgrades:    0
+
+*** L3 Stats ***
+Total accesses:          96
+Hits:                    4
+Misses:                  92
+Hit rate:                4.16667%
+Miss rate:               95.8333%
+Evictions:               0
+Coherence invalidations: 119
+Coherence downgrades:    72
+
+AMAT: 142.266 cycles
+
+=== Coherence Overhead ===
+Invalidations received:  119
+Downgrades received:     72
+Wasted snoops:           0
+Invalidation→Read:       4
+
+========== CORE 2 ==========
+
+*** L1 Stats ***
+Total accesses:          146
+Hits:                    33
+Misses:                  113
+Hit rate:                22.6027%
+Miss rate:               77.3973%
+Evictions:               105
+Coherence invalidations: 0
+Coherence downgrades:    0
+
+*** L2 Stats ***
+Total accesses:          113
+Hits:                    30
+Misses:                  83
+Hit rate:                26.5487%
+Miss rate:               73.4513%
+Evictions:               18
+Coherence invalidations: 0
+Coherence downgrades:    0
+
+*** L3 Stats ***
+Total accesses:          83
+Hits:                    7
+Misses:                  76
+Hit rate:                8.43373%
+Miss rate:               91.5663%
+Evictions:               0
+Coherence invalidations: 119
+Coherence downgrades:    62
+
+AMAT: 140.137 cycles
+
+=== Coherence Overhead ===
+Invalidations received:  119
+Downgrades received:     62
+Wasted snoops:           0
+Invalidation→Read:       7
+
+========== BUS Stats ==========
+Read transactions:   5136
+Write transactions:  4150
+Total snoops issued: 18572
+Total snoop cycles:  185720
+Avg snoop latency:   10 cycles
+Wasted snoops:       5997
+Wasted snoop ratio:  32.2905%
+Snoops issued:          18572
+Snoops prevented:       2237
+Snoops issued+prevented:20809
+Wasted (false positive):5997
+Bloom filter savings:   10.7502% of total bus traffic

@@ -13,8 +13,7 @@ class setAssociativeCache;
 
 class bus{
     private: 
-        //this is a vector of setAssociativeCache pointers 
-        
+               
     public: 
         void addListener(setAssociativeCache* L3);
         std::vector<setAssociativeCache*> listeners; //all L3's

@@ -46,12 +46,12 @@ public:
     int read(uint32_t address);
     void printStats();
     float calculateAMAT();
-    void printAllCaches(std::string label){
-    std::cout << "\n====== CORE " << core_id << " cache state: " << label << " ======\n";
-    // L1->printCache("L1");
-    // L2->printCache("L2");
-    // L3->printCache("L3");
-    }
+    // void printAllCaches(std::string label){
+    // std::cout << "\n====== CORE " << core_id << " cache state: " << label << " ======\n";
+    // // L1->printCache("L1");
+    // // L2->printCache("L2");
+    // // L3->printCache("L3");
+    // }
 };
 
 #endif

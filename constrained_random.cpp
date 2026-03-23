@@ -20,7 +20,7 @@ void constrainedRandomTest(Core* cores[], int numCores, int numOps, int seed, Te
         //Test 2: Large pool, sparse sharing
         uint32_t addr = ((rand() % 256) * 0x100); //--> high wasted snoops!
 
-        //Test 3: Very Sequential -> intuition for Prefetcher 
+        //Test 3: Very Sequential -> intuition for Prefetcher --> TBD LOL
         
         uint32_t data = (uint32_t)(rand() & 0xFFFFFFF0);
 
@@ -38,6 +38,7 @@ void constrainedRandomTest(Core* cores[], int numCores, int numOps, int seed, Te
                 result.passes++;
             } else {
                 result.fails++;
+                //[debug]
                 // only print on failure
                 cout << "FAIL seed=" << seed
                      << " iter=" << dec << i

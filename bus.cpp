@@ -12,10 +12,10 @@
 using namespace std;
 
 void bus::addListener(setAssociativeCache* L3){
-    listeners.push_back(L3); //object exists -> pass by reference 
+    listeners.push_back(L3);
 }
 
-pair<bool,uint8_t*> bus::readBus(uint32_t address, int core_id){//the bus SHOULDN'T do the RAMRead -> leave it for Cache -> bool isShared
+pair<bool,uint8_t*> bus::readBus(uint32_t address, int core_id){
     //2 cases: 1. does other cores have dirty data? 2. no dirty data, just read from RAM
     readTransactions++;
     uint8_t* dataPtr= nullptr; 
@@ -27,7 +27,7 @@ pair<bool,uint8_t*> bus::readBus(uint32_t address, int core_id){//the bus SHOULD
         totalSnoopsIssued++;
         totalSnoopCycles += BUS_CYCLES; // each snoop cycle costs
 
-        // bloom filter check BEFORE snooping
+        // bloom filter check before snooping
         if(!listeners[i]->bloomFilter.mightContain(address)){
             bloomPrevented++;
             listeners[i]->bloomFilter.wastedSnoopsPrevented++;
@@ -80,9 +80,7 @@ void bus::printStats(){
     cout << "Total snoops issued: " << totalSnoopsIssued << "\n";
     cout << "Total snoop cycles:  " << totalSnoopCycles  << "\n";
     if(totalSnoopsIssued > 0){
-        cout << "Avg snoop latency:   " 
-             << (float)totalSnoopCycles/totalSnoopsIssued 
-             << " cycles\n";
+        cout << "Avg snoop latency:   "<< (float)totalSnoopCycles/totalSnoopsIssued << " cycles\n";
     }
     
     // sum wasted snoops across all listeners

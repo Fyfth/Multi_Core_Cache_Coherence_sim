@@ -22,10 +22,10 @@ void Core::write(uint32_t address, uint32_t data){
         currentState = L3->getState(address);
     }
 
-    // STEP 1: write to L1
+    // step 1: write to L1
     L1->write(address, data);
 
-    // STEP 2: push to L2/L3 AND RAM immediately
+    // step 2: push to L2/L3 AND RAM immediately
     CacheLine* l1Line = L1->sets[L1->set(address)].get(L1->tag(address));
     if(l1Line != nullptr){
         L2->writeBlock(address, l1Line->data, EXCLUSIVE);
@@ -36,7 +36,7 @@ void Core::write(uint32_t address, uint32_t data){
         }
     }
 
-    // STEP 3: invalidate other cores
+    // step 3: invalidate other cores
     if(currentState != MODIFIED){
         b->writeBus(address, core_id);
     }
