@@ -239,37 +239,17 @@ Constrained random found **4 coherence bugs** that directed tests missed — all
 ---
 ## Bug Report
 
-9 coherence bugs found and fixed during development. Each bug is documented with root cause and fix.
+5 coherence bugs found and fixed during development. Each bug is documented with root cause and fix.
 
-### Bug 1: `backInvalidate` in `snoop` -> SEGFAULT
-**Root cause:** `snoop` called `backInvalidate` to flush dirty data from L1/L2 to L3 before responding to the bus. But `backInvalidate` removes lines as it flushes. The L3 line disappeared before snoop could read its state — null pointer dereference.  
-**Fix:** Created `flushToMe()` — flushes dirty data down without removing lines.
-
-### Bug 2: `writeBus` never firing
-**Root cause:** `writeBus` was called from `setAssociativeCache::write()` where `busPtr == nullptr` on L1. The bus pointer is only set on L3. So the `busPtr != nullptr` check always failed — writeBus never executed.  
-**Fix:** Moved writeBus call to `Core::write()` where the bus pointer is directly accessible.
-
-### Bug 3: Snoop invalidated L3 but not L1/L2
-**Root cause:** `writeBus` snoops L3 and invalidates it. But L1/L2 were never told. They still held stale copies — subsequent L1 hit returned wrong value.  
-**Fix:** Added `invalidateUp()` — called from snoop write case, travels L3->L2->L1 setting all copies INVALID.
-
-### Bug 4: INVALID lines served as cache hits
-**Root cause:** `readBlock` checked `contains(tagValue)` for the hit path. INVALID lines physically remain in the set — `contains()` returns true. Stale data was being returned as valid hits.  
-**Fix:** Added state check before returning hit:
-```cpp
-if(line->state == INVALID) misses++;  // fall through
-else { hits++; return line->data; }
-```
-
-### Bug 5: `writeBus` fires before `readBlock` fetches data
+### Bug 1: `writeBus` fires before `readBlock` fetches data (Notable error found at Directed Test)
 **Root cause:** `Core::write` called writeBus before `L1->write()` ran readBlock. writeBus invalidated other cores first — then readBlock tried to fetch from those now-invalidated cores and got nothing, falling through to stale RAM.  
 **Fix:** Swapped order — readBlock fetches data first, then writeBus invalidates the source.
 
-### Bug 6: `invalidateUp` writing stale data to RAM
+### Bug 2: `invalidateUp` writing stale data to RAM (Found at Constrained Random)
 **Root cause:** When invalidateUp ran on a core being invalidated, it wrote MODIFIED data to RAM before setting INVALID. But this data was stale — the writing core had already put the correct new value in RAM. The stale writeback overwrote the correct value.  
 **Fix:** Removed RAM write from `invalidateUp` entirely. The writing core writes to RAM in Core::write Step 2. Invalidated cores just set INVALID — no writeback needed.
 
-### Bug 7: `flushToMe` not writing to RAM from L3
+### Bug 3: `flushToMe` not writing to RAM from L3 -> Found at Constrained Random
 **Root cause:** `flushToMe` only flushed MODIFIED data to `nextLevel`. For L3, `nextLevel == nullptr` — so L3 MODIFIED data was never written to RAM.  
 **Fix:** Added L3 -> RAM path in `flushToMe`:
 ```cpp
@@ -278,11 +258,11 @@ else ramWrite(address, line->data);  // L3 writes to RAM
 line->state = SHARED;
 ```
 
-### Bug 8: Snoop checking `original_state` instead of `line->state`
+### Bug 4: Snoop checking `original_state` instead of `line->state` (Found at Constrained Random)
 **Root cause:** `original_state` was captured BEFORE `flushToMe` ran. `flushToMe` could change the line state (e.g. EXCLUSIVE -> MODIFIED by pulling fresh data from L1). Write case checked stale `original_state` and skipped RAM writeback.  
 **Fix:** Write case now checks `line->state` (post-flushToMe) instead of `original_state`.
 
-### Bug 9: `LRUCache::put()` ignoring state parameter ← root cause of constrained random failures
+### Bug 5: `LRUCache::put()` ignoring state parameter <- root cause of constrained random failures (Found at Constrained Random)
 **Root cause:** `put()` update case hardcoded `MODIFIED` regardless of the state parameter passed:
 ```cpp
 it->state = MODIFIED;  // ignores state parameter entirely
