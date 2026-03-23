@@ -38,7 +38,7 @@ Each node in the list is a `CacheLine` struct holding a 64-byte data block, a ta
 ![Cache Hierarchy](cache_hierarchy.png)
 
 Each core owns a **private** L1, L2, and L3. All L3s connect to a shared snooping bus.  
-On a read miss, the request cascades down: L1 → L2 → L3 → Bus → RAM.  
+On a read miss, the request cascades down: L1 -> L2 -> L3 -> Bus -> RAM.  
 On a write, the requesting core invalidates all other copies via the bus before modifying its L1.
 
 ---
@@ -130,7 +130,7 @@ from each other's cached data.
 |--------|-----------------|-----------------|
 | Invalidations (per core) | ~120 | ~18 |
 | Downgrades (per core) | ~65 | ~28 |
-| Invalidation→Read | ~4 | ~8 |
+| Invalidation->Read | ~4 | ~8 |
 
 **Observation:** Heavy contention generates 6x more invalidations — 
 constant ownership transfers between cores. Sparse workload has 
@@ -178,7 +178,7 @@ tradeoff inherent in probabilistic filtering.
 | 6 | False sharing | Same line, different words |
 | 7 | Ping pong | Repeated invalidation |
 | 8 | Temporal locality | L1 hit after warmup |
-| 9 | Read then write | SHARED → MODIFIED transition |
+| 9 | Read then write | SHARED -> MODIFIED transition |
 | 10 | Multiple addresses | No aliasing bugs |
 | 11 | Eviction | LRU eviction + dirty writeback |
 | 12 | Eviction + cross-core snoop | Combined eviction and coherence |
@@ -189,7 +189,7 @@ A self-checking testbench with a reference model — the same methodology used i
 
 **How it works:**
 ```
-srand(seed) → reproducible random sequence
+srand(seed) -> reproducible random sequence
 ↓
 Random: core id, operation (read/write), address from constrained pool
 ↓
@@ -219,7 +219,7 @@ Constrained random found **4 coherence bugs** that directed tests missed — all
 
 9 coherence bugs found and fixed during development. Each bug is documented with root cause and fix.
 
-### Bug 1: `backInvalidate` in `snoop` → SEGFAULT
+### Bug 1: `backInvalidate` in `snoop` -> SEGFAULT
 **Root cause:** `snoop` called `backInvalidate` to flush dirty data from L1/L2 to L3 before responding to the bus. But `backInvalidate` removes lines as it flushes. The L3 line disappeared before snoop could read its state — null pointer dereference.  
 **Fix:** Created `flushToMe()` — flushes dirty data down without removing lines.
 
@@ -229,7 +229,7 @@ Constrained random found **4 coherence bugs** that directed tests missed — all
 
 ### Bug 3: Snoop invalidated L3 but not L1/L2
 **Root cause:** `writeBus` snoops L3 and invalidates it. But L1/L2 were never told. They still held stale copies — subsequent L1 hit returned wrong value.  
-**Fix:** Added `invalidateUp()` — called from snoop write case, travels L3→L2→L1 setting all copies INVALID.
+**Fix:** Added `invalidateUp()` — called from snoop write case, travels L3->L2->L1 setting all copies INVALID.
 
 ### Bug 4: INVALID lines served as cache hits
 **Root cause:** `readBlock` checked `contains(tagValue)` for the hit path. INVALID lines physically remain in the set — `contains()` returns true. Stale data was being returned as valid hits.  
@@ -249,7 +249,7 @@ else { hits++; return line->data; }
 
 ### Bug 7: `flushToMe` not writing to RAM from L3
 **Root cause:** `flushToMe` only flushed MODIFIED data to `nextLevel`. For L3, `nextLevel == nullptr` — so L3 MODIFIED data was never written to RAM.  
-**Fix:** Added L3 → RAM path in `flushToMe`:
+**Fix:** Added L3 -> RAM path in `flushToMe`:
 ```cpp
 if(nextLevel != nullptr) nextLevel->writeBlock(address, line->data);
 else ramWrite(address, line->data);  // L3 writes to RAM
@@ -257,7 +257,7 @@ line->state = SHARED;
 ```
 
 ### Bug 8: Snoop checking `original_state` instead of `line->state`
-**Root cause:** `original_state` was captured BEFORE `flushToMe` ran. `flushToMe` could change the line state (e.g. EXCLUSIVE → MODIFIED by pulling fresh data from L1). Write case checked stale `original_state` and skipped RAM writeback.  
+**Root cause:** `original_state` was captured BEFORE `flushToMe` ran. `flushToMe` could change the line state (e.g. EXCLUSIVE -> MODIFIED by pulling fresh data from L1). Write case checked stale `original_state` and skipped RAM writeback.  
 **Fix:** Write case now checks `line->state` (post-flushToMe) instead of `original_state`.
 
 ### Bug 9: `LRUCache::put()` ignoring state parameter ← root cause of constrained random failures
@@ -265,7 +265,7 @@ line->state = SHARED;
 ```cpp
 it->state = MODIFIED;  // ignores state parameter entirely
 ```
-When `Core::write` Step 2 called `L2->writeBlock(address, data, EXCLUSIVE)`, put() ignored EXCLUSIVE and set MODIFIED. Next time `Core::write` checked L2 state, it found MODIFIED → skipped writeBus → other cores with SHARED copies never invalidated → stale reads.  
+When `Core::write` Step 2 called `L2->writeBlock(address, data, EXCLUSIVE)`, put() ignored EXCLUSIVE and set MODIFIED. Next time `Core::write` checked L2 state, it found MODIFIED -> skipped writeBus -> other cores with SHARED copies never invalidated -> stale reads.  
 **Fix:**
 ```cpp
 it->state = state;  // use passed state parameter
@@ -280,18 +280,13 @@ One line. Found by constrained random after 83 sequential operations — impossi
 2. Missing base cases        (Bugs 3, 4, 7)
 3. Stale state variables     (Bugs 6, 8, 9)
 ```
-These are the same failure modes found in real CPU design verification.
 ---
 
 ## Build & Run
 
 ```bash
-g++ -std=c++17 -o cache_sim bus.cpp core.cpp lru.cpp setAssociativeCache.cpp
-./cache_sim
-```
-
-For debug output with address sanitizer:
-```bash
-g++ -std=c++17 -fsanitize=address -g -o cache_sim bus.cpp core.cpp lru.cpp setAssociativeCache.cpp
+g++ -std=c++17 -O2 -o cache_sim \
+    bus.cpp core.cpp lru.cpp setAssociativeCache.cpp \
+    constrained_random.cpp DUT.cpp
 ./cache_sim
 ```
