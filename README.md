@@ -185,7 +185,7 @@ tradeoff inherent in probabilistic filtering.
 
 ### Constrained Random Verification
 
-A self-checking testbench with a reference model — the same methodology used in industry CPU design verification.
+A self-checking testbench with a simple reference model 
 
 **How it works:**
 ```
