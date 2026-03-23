@@ -55,7 +55,7 @@ On a write, the requesting core invalidates all other copies via the bus before 
 
 ---
 
-## API
+## Functions
 
 ### `bus.h`
 | Function | Description |
@@ -163,6 +163,39 @@ counting bloom filter as future work. Aggressive resets (< 50 evictions)
 cause coherence violations — demonstrating the correctness/performance 
 tradeoff inherent in probabilistic filtering.
 
+---
+## Known Limitation: Sparse Workload Coherence Under L3 Pressure
+
+### What works
+Constrained random verification is validated on the heavy contention 
+workload (16 addresses, 3 cores, 20 seeds × 10,000 ops = 0 failures). 
+This pool exercises maximum coherence stress — constant invalidation, 
+ping-pong, and false sharing — while keeping the working set within 
+L3 capacity (16 lines < 176 line L3).
+
+### What breaks
+The sparse workload (256 addresses) exceeds L3 capacity, causing 
+constant eviction pressure. Under these conditions, coherence failures 
+appear after ~500 operations per seed.
+
+### Root cause hypothesis
+When L3 fills up and begins evicting, MODIFIED lines write back to RAM. 
+With 3 cores constantly writing overlapping addresses, a stale MODIFIED 
+line evicted from L2/L3 can overwrite a newer value already in RAM — 
+a classic write ordering violation under eviction pressure.
+
+This is a real class of hardware bug. In industry, it would be caught 
+by a full coherence checker monitoring every RAM write with timestamps 
+or sequence numbers to detect out-of-order writebacks. The fix requires 
+either a directory protocol tracking global write order, or a snoop 
+filter preventing stale evictions from reaching RAM.
+
+### Why this is hard to catch
+The bug only manifests when L3 is genuinely full and evicting — 
+requiring enough unique addresses to exceed L3 capacity. Directed 
+tests and small-pool constrained random never fill L3 completely, 
+so they never trigger this path. This is exactly the class of bug 
+that constrained random with a large address pool is designed to find.
 ---
 ## Verification Methodology
 
