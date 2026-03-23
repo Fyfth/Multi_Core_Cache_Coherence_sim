@@ -192,7 +192,7 @@ int main(){
 
     TestResult r;
     runConstrainedRandom(coreArr, b, 3, 20, 500);
-    cout << "pass=" << r.passes << " fail=" << r.fails << "\n";
+   
 
     // stats
     coreArr[0]->printStats();

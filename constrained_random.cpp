@@ -25,11 +25,6 @@ void constrainedRandomTest(Core* cores[], int numCores, int numOps, int seed, Te
         uint32_t data = (uint32_t)(rand() & 0xFFFFFFF0);
 
         if(op == 1){
-            if(addr == 0x400){
-                cout << "WRITE 0x400 = 0x" << hex << data 
-                    << " by core=" << coreId 
-                    << " iter=" << dec << i << "\n";
-            }
             cores[coreId]->write(addr, data);
             ref[addr] = data;
         } else {
@@ -59,7 +54,7 @@ void constrainedRandomTest(Core* cores[], int numCores, int numOps, int seed, Te
 void runConstrainedRandom(Core* cores[], bus* b, int numCores, 
                           int numSeeds, int opsPerSeed){
     cout << "\n****** CONSTRAINED RANDOM TESTS ******\n";
-    cout << "  Seeds: "    << numSeeds
+    cout << "  Seeds: "    << dec<< numSeeds
          << "  Ops/seed: " << opsPerSeed
          << "  Cores: "    << numCores << "\n\n";
 

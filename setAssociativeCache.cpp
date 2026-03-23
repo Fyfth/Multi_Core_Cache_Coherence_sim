@@ -107,10 +107,10 @@ void setAssociativeCache::evictIfNeeded(int set){
                 for (int i = 0; i < 64; i++) {
                     RAM[victimAddress + i] = victim->data[i];
                 }
-                //cout << "Evicting dirty line to RAM\n";
-                cout << "→ wrote to RAM\n";
+                // //cout << "Evicting dirty line to RAM\n";
+                // cout << "wrote to RAM\n";
             }else{
-                cout << "→ NOT written to RAM (state not MODIFIED)\n";
+                // cout << "NOT written to RAM (state not MODIFIED)\n";
             }
             
             
@@ -278,10 +278,10 @@ pair<STATE, uint8_t*> setAssociativeCache::snoop(uint32_t address, int type){// 
     //assume only L3 calls this -> inclusive writeback
     int tagValue = tag(address); 
     int setIdx = set(address); 
-    cout << "SNOOP: addr=0x" << hex << address 
-         << " type=" << type
-         << " core_id=" << core_id
-         << " contains=" << sets[setIdx].contains(tagValue) << dec << "\n";
+    // cout << "SNOOP: addr=0x" << hex << address 
+    //      << " type=" << type
+    //      << " core_id=" << core_id
+    //      << " contains=" << sets[setIdx].contains(tagValue) << dec << "\n";
 
     if(!sets[setIdx].contains(tagValue)){
         wastedSnoops++;
